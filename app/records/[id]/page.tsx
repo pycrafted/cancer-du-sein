@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Modal } from "@/components/ui/modal"
 import {
   ArrowLeft,
   Calendar,
@@ -46,6 +47,36 @@ export default function RecordDetailPage() {
   const [screening, setScreening] = useState<Screening | null>(null)
   const [loading, setLoading] = useState(true)
   const [deleting, setDeleting] = useState(false)
+  
+  // Modal state
+  const [modal, setModal] = useState<{
+    isOpen: boolean
+    title: string
+    message: string
+    type: "success" | "error" | "warning" | "info"
+    onConfirm?: () => void
+  }>({
+    isOpen: false,
+    title: "",
+    message: "",
+    type: "info"
+  })
+
+  // Function to show modal
+  const showModal = (title: string, message: string, type: "success" | "error" | "warning" | "info" = "info", onConfirm?: () => void) => {
+    setModal({
+      isOpen: true,
+      title,
+      message,
+      type,
+      onConfirm
+    })
+  }
+
+  // Function to close modal
+  const closeModal = () => {
+    setModal(prev => ({ ...prev, isOpen: false }))
+  }
 
   useEffect(() => {
     fetchScreening()
@@ -67,10 +98,18 @@ export default function RecordDetailPage() {
   }
 
   const handleDelete = async () => {
-    if (!confirm("Êtes-vous sûr de vouloir supprimer cet enregistrement ?")) {
-      return
-    }
+    // Show confirmation modal
+    showModal(
+      "Confirmer la suppression",
+      "Êtes-vous sûr de vouloir supprimer cet enregistrement ? Cette action est irréversible.",
+      "warning",
+      () => {
+        performDelete()
+      }
+    )
+  }
 
+  const performDelete = async () => {
     setDeleting(true)
     try {
       const response = await fetch(`/api/screening/${params.id}`, {
@@ -78,13 +117,27 @@ export default function RecordDetailPage() {
       })
 
       if (response.ok) {
-        router.push("/records")
+        showModal(
+          "Suppression réussie",
+          "L'enregistrement a été supprimé avec succès. Vous allez être redirigé vers la liste des enregistrements.",
+          "success",
+          () => {
+            router.push("/records")
+          }
+        )
       } else {
-        alert("Erreur lors de la suppression")
+        showModal(
+          "Erreur de suppression",
+          "Une erreur est survenue lors de la suppression. Veuillez réessayer.",
+          "error"
+        )
       }
     } catch (error) {
-      console.error("[v0] Error deleting screening:", error)
-      alert("Erreur lors de la suppression")
+      showModal(
+        "Erreur de suppression",
+        "Une erreur est survenue lors de la suppression. Veuillez vérifier votre connexion et réessayer.",
+        "error"
+      )
     } finally {
       setDeleting(false)
     }
@@ -287,6 +340,19 @@ export default function RecordDetailPage() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Modal */}
+        <Modal
+          isOpen={modal.isOpen}
+          onClose={closeModal}
+          title={modal.title}
+          message={modal.message}
+          type={modal.type}
+          onConfirm={modal.onConfirm}
+          confirmText={modal.type === "warning" ? "Supprimer" : "Compris"}
+          cancelText="Annuler"
+          showCancelButton={modal.type === "warning"}
+        />
       </div>
     </div>
   )

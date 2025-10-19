@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Modal } from "@/components/ui/modal"
 import { Loader2, Trash2 } from "lucide-react"
 import Image from "next/image"
 
@@ -30,7 +31,37 @@ export default function RecordsPage() {
   const [screenings, setScreenings] = useState<Screening[]>([])
   const [loading, setLoading] = useState(true)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  
+  // Modal state
+  const [modal, setModal] = useState<{
+    isOpen: boolean
+    title: string
+    message: string
+    type: "success" | "error" | "warning" | "info"
+    onConfirm?: () => void
+  }>({
+    isOpen: false,
+    title: "",
+    message: "",
+    type: "info"
+  })
   const router = useRouter()
+
+  // Function to show modal
+  const showModal = (title: string, message: string, type: "success" | "error" | "warning" | "info" = "info", onConfirm?: () => void) => {
+    setModal({
+      isOpen: true,
+      title,
+      message,
+      type,
+      onConfirm
+    })
+  }
+
+  // Function to close modal
+  const closeModal = () => {
+    setModal(prev => ({ ...prev, isOpen: false }))
+  }
 
   useEffect(() => {
     fetchScreenings()
@@ -61,10 +92,18 @@ export default function RecordsPage() {
   const handleDelete = async (e: React.MouseEvent, id: string) => {
     e.stopPropagation()
 
-    if (!confirm("Êtes-vous sûr de vouloir supprimer cet enregistrement ?")) {
-      return
-    }
+    // Show confirmation modal
+    showModal(
+      "Confirmer la suppression",
+      "Êtes-vous sûr de vouloir supprimer cet enregistrement ? Cette action est irréversible.",
+      "warning",
+      () => {
+        performDelete(id)
+      }
+    )
+  }
 
+  const performDelete = async (id: string) => {
     setDeletingId(id)
     try {
       const response = await fetch(`/api/screening/${id}`, {
@@ -73,12 +112,24 @@ export default function RecordsPage() {
 
       if (response.ok) {
         setScreenings(screenings.filter((s) => s.id !== id))
+        showModal(
+          "Suppression réussie",
+          "L'enregistrement a été supprimé avec succès.",
+          "success"
+        )
       } else {
-        alert("Erreur lors de la suppression")
+        showModal(
+          "Erreur de suppression",
+          "Une erreur est survenue lors de la suppression. Veuillez réessayer.",
+          "error"
+        )
       }
     } catch (error) {
-      console.error("[v0] Error deleting screening:", error)
-      alert("Erreur lors de la suppression")
+      showModal(
+        "Erreur de suppression",
+        "Une erreur est survenue lors de la suppression. Veuillez vérifier votre connexion et réessayer.",
+        "error"
+      )
     } finally {
       setDeletingId(null)
     }
@@ -181,6 +232,19 @@ export default function RecordsPage() {
             )}
           </CardContent>
         </Card>
+
+        {/* Modal */}
+        <Modal
+          isOpen={modal.isOpen}
+          onClose={closeModal}
+          title={modal.title}
+          message={modal.message}
+          type={modal.type}
+          onConfirm={modal.onConfirm}
+          confirmText={modal.type === "warning" ? "Supprimer" : "Compris"}
+          cancelText="Annuler"
+          showCancelButton={modal.type === "warning"}
+        />
       </div>
     </div>
   )

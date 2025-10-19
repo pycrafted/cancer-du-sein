@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
+import { Modal } from "@/components/ui/modal"
 import { Checkbox } from "@/components/ui/checkbox"
 
 export function ScreeningForm() {
@@ -22,6 +23,20 @@ export function ScreeningForm() {
   const [showSuccess, setShowSuccess] = useState(false)
   const [currentStep, setCurrentStep] = useState(1)
   const [completedSteps, setCompletedSteps] = useState<number[]>([])
+  
+  // Modal states
+  const [modal, setModal] = useState<{
+    isOpen: boolean
+    title: string
+    message: string
+    type: "success" | "error" | "warning" | "info"
+    onConfirm?: () => void
+  }>({
+    isOpen: false,
+    title: "",
+    message: "",
+    type: "info"
+  })
   const [formData, setFormData] = useState({
     date: getTodayDate(), // Set default to today's date
     screeningNumber: "",
@@ -66,6 +81,22 @@ export function ScreeningForm() {
     })
     setCurrentStep(1)
     setCompletedSteps([])
+  }
+
+  // Function to show modal
+  const showModal = (title: string, message: string, type: "success" | "error" | "warning" | "info" = "info", onConfirm?: () => void) => {
+    setModal({
+      isOpen: true,
+      title,
+      message,
+      type,
+      onConfirm
+    })
+  }
+
+  // Function to close modal
+  const closeModal = () => {
+    setModal(prev => ({ ...prev, isOpen: false }))
   }
 
   // Validation functions for each step
@@ -119,7 +150,11 @@ export function ScreeningForm() {
         setCurrentStep(prev => prev + 1)
       } else {
         // Show validation message
-        alert("Veuillez remplir tous les champs requis avant de passer à l'étape suivante.")
+        showModal(
+          "Champs requis manquants",
+          "Veuillez remplir tous les champs requis avant de passer à l'étape suivante.",
+          "warning"
+        )
       }
     }
   }
@@ -159,7 +194,11 @@ export function ScreeningForm() {
     
     // Vérifier que toutes les étapes requises sont complètes
     if (!canSubmit()) {
-      alert("Veuillez compléter toutes les étapes requises avant de soumettre le formulaire.")
+      showModal(
+        "Formulaire incomplet",
+        "Veuillez compléter toutes les étapes requises avant de soumettre le formulaire.",
+        "warning"
+      )
       return
     }
     
@@ -197,16 +236,22 @@ export function ScreeningForm() {
         throw new Error("Erreur lors de l'enregistrement")
       }
 
-      setShowSuccess(true)
-      resetForm()
-
-      // Hide success message after 3 seconds
-      setTimeout(() => {
-        setShowSuccess(false)
-      }, 3000)
+      // Show success modal
+      showModal(
+        "Enregistrement réussi !",
+        "Votre formulaire de dépistage a été enregistré avec succès. Merci pour votre participation à cette initiative importante.",
+        "success",
+        () => {
+          resetForm()
+          setShowSuccess(false)
+        }
+      )
     } catch (error) {
-      console.error("[v0] Error submitting form:", error)
-      alert("Erreur lors de l'enregistrement. Veuillez réessayer.")
+      showModal(
+        "Erreur d'enregistrement",
+        "Une erreur est survenue lors de l'enregistrement de votre formulaire. Veuillez vérifier votre connexion et réessayer.",
+        "error"
+      )
     } finally {
       setIsSubmitting(false)
     }
@@ -774,6 +819,18 @@ export function ScreeningForm() {
           <span>Vos données sont protégées et confidentielles</span>
         </div>
       </div>
+
+      {/* Modal */}
+      <Modal
+        isOpen={modal.isOpen}
+        onClose={closeModal}
+        title={modal.title}
+        message={modal.message}
+        type={modal.type}
+        onConfirm={modal.onConfirm}
+        confirmText="Compris"
+        showCancelButton={false}
+      />
     </div>
   )
 }
