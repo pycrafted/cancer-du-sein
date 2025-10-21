@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
 import { getSupabaseBrowserClient } from "@/lib/supabase"
+import { mockSupabase } from "@/lib/mock-data"
 import Image from "next/image"
 
 interface ScreeningStats {
@@ -29,35 +30,70 @@ export default function Home() {
   useEffect(() => {
     async function fetchStats() {
       try {
-        const supabase = getSupabaseBrowserClient()
+        // Essayer d'utiliser Supabase d'abord, sinon utiliser les données mockées
+        try {
+          const supabase = getSupabaseBrowserClient()
 
-        const { data, error } = await supabase.from("screening_records").select("*")
+          const { data, error } = await supabase.from("screening_records").select("*")
 
-        if (error) throw error
+          if (error) throw error
 
-        if (data) {
-          const total = data.length
-          const vaccinated = data.filter((r) => r.vaccination).length
-          const mammographyDone = data.filter((r) => r.mammography !== "non").length
-          const gynecoConsultation = data.filter((r) => r.gyneco_consultation).length
-          const averageAge = data.reduce((sum, r) => sum + r.age, 0) / total || 0
+          if (data) {
+            const total = data.length
+            const vaccinated = data.filter((r) => r.vaccination).length
+            const mammographyDone = data.filter((r) => r.mammography !== "non").length
+            const gynecoConsultation = data.filter((r) => r.gyneco_consultation).length
+            const averageAge = data.reduce((sum, r) => sum + r.age, 0) / total || 0
 
-          const examsBreakdown = {
-            fcu: data.filter((r) => r.fcu).length,
-            hpv: data.filter((r) => r.hpv).length,
-            mammaryUltrasound: data.filter((r) => r.mammary_ultrasound).length,
-            thermoAblation: data.filter((r) => r.thermo_ablation).length,
-            anapath: data.filter((r) => r.anapath).length,
+            const examsBreakdown = {
+              fcu: data.filter((r) => r.fcu).length,
+              hpv: data.filter((r) => r.hpv).length,
+              mammaryUltrasound: data.filter((r) => r.mammary_ultrasound).length,
+              thermoAblation: data.filter((r) => r.thermo_ablation).length,
+              anapath: data.filter((r) => r.anapath).length,
+            }
+
+            setStats({
+              total,
+              vaccinated,
+              mammographyDone,
+              gynecoConsultation,
+              averageAge: Math.round(averageAge),
+              examsBreakdown,
+            })
           }
+        } catch (supabaseError) {
+          // Fallback vers les données mockées
+          console.log("[DEMO] Using mock data instead of Supabase")
+          
+          const { data, error } = await mockSupabase.getScreenings()
 
-          setStats({
-            total,
-            vaccinated,
-            mammographyDone,
-            gynecoConsultation,
-            averageAge,
-            examsBreakdown,
-          })
+          if (error) throw error
+
+          if (data) {
+            const total = data.length
+            const vaccinated = data.filter((r) => r.vaccination).length
+            const mammographyDone = data.filter((r) => r.mammography !== "non").length
+            const gynecoConsultation = data.filter((r) => r.gyneco_consultation).length
+            const averageAge = data.reduce((sum, r) => sum + r.age, 0) / total || 0
+
+            const examsBreakdown = {
+              fcu: data.filter((r) => r.fcu).length,
+              hpv: data.filter((r) => r.hpv).length,
+              mammaryUltrasound: data.filter((r) => r.mammary_ultrasound).length,
+              thermoAblation: data.filter((r) => r.thermo_ablation).length,
+              anapath: data.filter((r) => r.anapath).length,
+            }
+
+            setStats({
+              total,
+              vaccinated,
+              mammographyDone,
+              gynecoConsultation,
+              averageAge: Math.round(averageAge),
+              examsBreakdown,
+            })
+          }
         }
       } catch (error) {
         console.error("[v0] Error fetching stats:", error)
@@ -83,38 +119,6 @@ export default function Home() {
   return (
     <div className="min-h-screen py-4 sm:py-6 lg:py-8 px-4">
       <div className="max-w-7xl mx-auto">
-        {/* Hero Section */}
-        <div className="text-center mb-8 sm:mb-10 lg:mb-12 fade-in-up">
-          <div className="relative inline-block mb-6 sm:mb-8">
-            <div className="absolute inset-0 gradient-primary rounded-full blur-3xl opacity-30 scale-150"></div>
-            <div className="relative flex flex-col sm:flex-row items-center justify-center gap-4 sm:gap-6 p-4 sm:p-6 lg:p-8 glass-effect rounded-2xl sm:rounded-3xl shadow-strong">
-              <div className="relative">
-                <Image
-                  src="/images/ruban-rose.png"
-                  alt="Ruban Rose Cancer du Sein"
-                  width={80}
-                  height={80}
-                  className="w-16 h-16 sm:w-20 sm:h-20 lg:w-24 lg:h-24 floating-animation"
-                />
-                <div className="absolute -top-1 -right-1 w-4 h-4 sm:w-5 sm:h-5 lg:w-6 lg:h-6 bg-primary rounded-full pulse-glow flex items-center justify-center">
-                  <span className="text-xs text-primary-foreground font-bold">!</span>
-                </div>
-              </div>
-              <div className="text-center sm:text-left">
-                <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl xl:text-6xl font-bold gradient-primary bg-clip-text text-transparent mb-2">
-                  Résultats du Dépistage
-                </h1>
-                <p className="text-muted-foreground text-sm sm:text-base md:text-lg lg:text-xl">
-                  Statistiques générales des dépistages enregistrés
-                </p>
-                <div className="flex items-center justify-center sm:justify-start gap-2 mt-3 text-xs sm:text-sm text-primary">
-                  <div className="w-2 h-2 bg-primary rounded-full pulse-glow"></div>
-                  <span>Données mises à jour en temps réel</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
 
         {stats && (
           <div className="space-y-6 sm:space-y-8">

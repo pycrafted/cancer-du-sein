@@ -39,7 +39,6 @@ export function ScreeningForm() {
   })
   const [formData, setFormData] = useState({
     date: getTodayDate(), // Set default to today's date
-    screeningNumber: "",
     lastName: "",
     firstName: "",
     age: "",
@@ -52,16 +51,19 @@ export function ScreeningForm() {
     gynecoDate: getTodayDate(), // Add gyneco date field with default
     fcu: "",
     fcuLocation: "",
+    hasAdditionalExams: "",
     hpv: false,
     echographyMammaire: false,
     thermoAblation: false,
     anapath: false,
   })
+  
+  // État pour le numéro de dépistage généré automatiquement
+  const [generatedScreeningNumber, setGeneratedScreeningNumber] = useState<string | null>(null)
 
   const resetForm = () => {
     setFormData({
       date: getTodayDate(), // Reset to today's date
-      screeningNumber: "",
       lastName: "",
       firstName: "",
       age: "",
@@ -74,6 +76,7 @@ export function ScreeningForm() {
       gynecoDate: getTodayDate(), // Reset gyneco date to today
       fcu: "",
       fcuLocation: "",
+      hasAdditionalExams: "",
       hpv: false,
       echographyMammaire: false,
       thermoAblation: false,
@@ -81,6 +84,7 @@ export function ScreeningForm() {
     })
     setCurrentStep(1)
     setCompletedSteps([])
+    setGeneratedScreeningNumber(null)
   }
 
   // Function to show modal
@@ -103,7 +107,6 @@ export function ScreeningForm() {
   const validateStep1 = () => {
     return (
       formData.date &&
-      formData.screeningNumber &&
       formData.lastName &&
       formData.firstName &&
       formData.age &&
@@ -159,6 +162,112 @@ export function ScreeningForm() {
     }
   }
 
+  // Fonction pour enregistrer automatiquement quand vaccination = "oui"
+  const handleVaccinationChange = (value: string) => {
+    setFormData({ ...formData, vaccination: value })
+    
+    // Si vaccination = "oui", enregistrer automatiquement
+    if (value === "oui") {
+      // Vérifier que l'étape 1 est complète
+      if (validateStep1()) {
+        // Marquer l'étape 2 comme complète
+        if (!completedSteps.includes(2)) {
+          setCompletedSteps(prev => [...prev, 2])
+        }
+        
+        // Enregistrer automatiquement
+        handleAutoSubmit()
+      } else {
+        showModal(
+          "Informations manquantes",
+          "Veuillez d'abord compléter les informations personnelles avant de continuer.",
+          "warning"
+        )
+      }
+    }
+  }
+
+  // Fonction pour gérer les examens complémentaires
+  const handleAdditionalExamsChange = (value: string) => {
+    setFormData({ ...formData, hasAdditionalExams: value })
+    
+    // Si "Non" est sélectionné, enregistrer automatiquement
+    if (value === "non") {
+      // Vérifier que les étapes 1 et 2 sont complètes
+      if (validateStep1() && validateStep2()) {
+        // Marquer l'étape 3 comme complète
+        if (!completedSteps.includes(3)) {
+          setCompletedSteps(prev => [...prev, 3])
+        }
+        
+        // Enregistrer automatiquement
+        handleAutoSubmit()
+      } else {
+        showModal(
+          "Informations manquantes",
+          "Veuillez d'abord compléter les étapes précédentes avant de continuer.",
+          "warning"
+        )
+      }
+    }
+  }
+
+  // Fonction pour l'enregistrement automatique
+  const handleAutoSubmit = async () => {
+    setIsSubmitting(true)
+
+    try {
+      const response = await fetch("/api/screening", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          date: formData.date,
+          lastName: formData.lastName,
+          firstName: formData.firstName,
+          age: formData.age,
+          phone: formData.phone,
+          address: formData.address,
+          vaccination: formData.vaccination,
+          mammography: formData.mammography,
+          mammographyDate: formData.mammography === "oui" ? formData.mammographyDate : null,
+          gynecoConsultation: formData.gynecologyConsultation,
+          gynecoDate: formData.gynecologyConsultation === "oui" ? formData.gynecoDate : null,
+          fcu: formData.fcu === "oui",
+          fcuLocation: formData.fcu === "oui" ? formData.fcuLocation : null,
+          hasAdditionalExams: formData.hasAdditionalExams,
+          hpv: formData.hpv,
+          mammaryUltrasound: formData.echographyMammaire,
+          thermoAblation: formData.thermoAblation,
+          anapath: formData.anapath,
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error("Erreur lors de l'enregistrement")
+      }
+
+      const result = await response.json()
+      
+      // Récupérer le numéro de dépistage généré automatiquement
+      if (result.screeningNumber) {
+        setGeneratedScreeningNumber(result.screeningNumber)
+      }
+
+      // Enregistrement silencieux - pas de modal
+      resetForm()
+    } catch (error) {
+      showModal(
+        "Erreur d'enregistrement automatique",
+        "Une erreur est survenue lors de l'enregistrement automatique. Veuillez réessayer.",
+        "error"
+      )
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
   const goToPreviousStep = () => {
     if (currentStep > 1) {
       setCurrentStep(prev => prev - 1)
@@ -185,7 +294,7 @@ export function ScreeningForm() {
       title: "Examens Complémentaires",
       description: "Examens supplémentaires et tests",
       icon: Microscope,
-      fields: ["fcu", "fcuLocation", "hpv", "echographyMammaire", "thermoAblation", "anapath"]
+      fields: ["hasAdditionalExams", "fcu", "fcuLocation", "hpv", "echographyMammaire", "thermoAblation", "anapath"]
     }
   ]
 
@@ -212,7 +321,6 @@ export function ScreeningForm() {
         },
         body: JSON.stringify({
           date: formData.date,
-          screeningNumber: formData.screeningNumber,
           lastName: formData.lastName,
           firstName: formData.firstName,
           age: formData.age,
@@ -225,6 +333,7 @@ export function ScreeningForm() {
           gynecoDate: formData.gynecologyConsultation === "oui" ? formData.gynecoDate : null, // Send gyneco date
           fcu: formData.fcu === "oui",
           fcuLocation: formData.fcu === "oui" ? formData.fcuLocation : null, // Send FCU location
+          hasAdditionalExams: formData.hasAdditionalExams,
           hpv: formData.hpv,
           mammaryUltrasound: formData.echographyMammaire,
           thermoAblation: formData.thermoAblation,
@@ -236,14 +345,21 @@ export function ScreeningForm() {
         throw new Error("Erreur lors de l'enregistrement")
       }
 
+      const result = await response.json()
+      
+      // Récupérer le numéro de dépistage généré automatiquement
+      if (result.screeningNumber) {
+        setGeneratedScreeningNumber(result.screeningNumber)
+      }
+
       // Show success modal
       showModal(
         "Enregistrement réussi !",
-        "Votre formulaire de dépistage a été enregistré avec succès. Merci pour votre participation à cette initiative importante.",
+        `Votre formulaire de dépistage a été enregistré avec succès. Votre numéro de dépistage est : ${result.screeningNumber || 'N/A'}. Merci pour votre participation à cette initiative importante.`,
         "success",
         () => {
-          resetForm()
-          setShowSuccess(false)
+      resetForm()
+        setShowSuccess(false)
         }
       )
     } catch (error) {
@@ -327,15 +443,6 @@ export function ScreeningForm() {
       <Card className="group relative overflow-hidden border-0 shadow-strong hover:shadow-strong transition-all duration-500 fade-in-scale">
         <div className="absolute inset-0 gradient-accent opacity-5 group-hover:opacity-10 transition-opacity duration-500"></div>
         <CardHeader className="relative bg-gradient-to-r from-accent/20 to-accent/10 border-b border-primary/10 py-4">
-          <div className="flex items-center gap-2">
-            <div className="w-1.5 h-5 gradient-primary rounded-full"></div>
-            <CardTitle className="text-xl font-bold gradient-primary bg-clip-text text-transparent">
-              Formulaire de Dépistage
-            </CardTitle>
-          </div>
-          <CardDescription className="text-sm text-muted-foreground mt-1">
-            Remplissez tous les champs requis avec précision.
-          </CardDescription>
         </CardHeader>
         <CardContent className="pt-6 relative">
           <form onSubmit={handleSubmit} className="space-y-6">
@@ -356,38 +463,6 @@ export function ScreeningForm() {
                   </div>
                 </div>
 
-                {/* Date and Screening Number */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
-                  <div className="space-y-3 group">
-                    <Label htmlFor="date" className="text-sm font-semibold text-foreground flex items-center gap-2">
-                      <div className="w-2 h-2 bg-primary rounded-full pulse-glow"></div>
-                      Date *
-                    </Label>
-                    <Input
-                      id="date"
-                      type="date"
-                      required
-                      value={formData.date}
-                      onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-                      className="h-12 border-2 border-primary/20 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all duration-300 rounded-xl"
-                    />
-                  </div>
-                  <div className="space-y-3 group">
-                    <Label htmlFor="screeningNumber" className="text-sm font-semibold text-foreground flex items-center gap-2">
-                      <div className="w-2 h-2 bg-chart-2 rounded-full pulse-glow"></div>
-                      N° de Dépistage *
-                    </Label>
-                    <Input
-                      id="screeningNumber"
-                      type="text"
-                      required
-                      placeholder="N°..."
-                      value={formData.screeningNumber}
-                      onChange={(e) => setFormData({ ...formData, screeningNumber: e.target.value })}
-                      className="h-12 border-2 border-primary/20 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all duration-300 rounded-xl"
-                    />
-                  </div>
-                </div>
 
                 {/* Personal Information */}
                 <div className="space-y-4 sm:space-y-6 p-4 sm:p-6 lg:p-8 bg-gradient-to-r from-accent/20 to-accent/10 rounded-2xl border border-primary/10 hover:border-primary/20 transition-all duration-300">
@@ -396,85 +471,100 @@ export function ScreeningForm() {
                     <h3 className="text-xl font-bold text-foreground">Coordonnées Personnelles</h3>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 lg:gap-8">
-                    <div className="space-y-4">
-                      <Label htmlFor="lastName" className="text-sm font-semibold text-foreground flex items-center gap-2">
-                        <div className="w-2 h-2 bg-chart-1 rounded-full pulse-glow"></div>
-                        Nom *
-                      </Label>
-                      <Input
-                        id="lastName"
-                        type="text"
-                        required
-                        value={formData.lastName}
-                        onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
-                        className="h-12 border-2 border-primary/20 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all duration-300 rounded-xl"
-                      />
-                    </div>
+                       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 lg:gap-8">
+                         <div className="space-y-4">
+                           <Label htmlFor="date" className="text-sm font-semibold text-foreground flex items-center gap-2">
+                             <div className="w-2 h-2 bg-primary rounded-full pulse-glow"></div>
+                  Date *
+                </Label>
+                <Input
+                  id="date"
+                  type="date"
+                  required
+                  value={formData.date}
+                  onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                             className="h-12 border-2 border-primary/20 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all duration-300 rounded-xl"
+                />
+              </div>
 
-                    <div className="space-y-4">
-                      <Label htmlFor="firstName" className="text-sm font-semibold text-foreground flex items-center gap-2">
-                        <div className="w-2 h-2 bg-chart-2 rounded-full pulse-glow"></div>
-                        Prénom(s) *
-                      </Label>
-                      <Input
-                        id="firstName"
-                        type="text"
-                        required
-                        value={formData.firstName}
-                        onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
-                        className="h-12 border-2 border-primary/20 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all duration-300 rounded-xl"
-                      />
-                    </div>
-                  </div>
+                         <div className="space-y-4">
+                           <Label htmlFor="firstName" className="text-sm font-semibold text-foreground flex items-center gap-2">
+                             <div className="w-2 h-2 bg-chart-2 rounded-full pulse-glow"></div>
+                             Prénom(s) *
+                </Label>
+                <Input
+                             id="firstName"
+                  type="text"
+                  required
+                             value={formData.firstName}
+                             onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
+                             className="h-12 border-2 border-primary/20 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all duration-300 rounded-xl"
+                           />
+            </div>
+
+                         <div className="space-y-4">
+                           <Label htmlFor="lastName" className="text-sm font-semibold text-foreground flex items-center gap-2">
+                             <div className="w-2 h-2 bg-chart-1 rounded-full pulse-glow"></div>
+                    Nom *
+                  </Label>
+                  <Input
+                    id="lastName"
+                    type="text"
+                    required
+                    value={formData.lastName}
+                    onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
+                             className="h-12 border-2 border-primary/20 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all duration-300 rounded-xl"
+                  />
+                </div>
+              </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 lg:gap-8">
                     <div className="space-y-4">
                       <Label htmlFor="age" className="text-sm font-semibold text-foreground flex items-center gap-2">
                         <div className="w-2 h-2 bg-chart-3 rounded-full pulse-glow"></div>
-                        Âge *
-                      </Label>
-                      <Input
-                        id="age"
-                        type="number"
-                        required
-                        value={formData.age}
-                        onChange={(e) => setFormData({ ...formData, age: e.target.value })}
+                    Âge *
+                  </Label>
+                  <Input
+                    id="age"
+                    type="number"
+                    required
+                    value={formData.age}
+                    onChange={(e) => setFormData({ ...formData, age: e.target.value })}
                         className="h-12 border-2 border-primary/20 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all duration-300 rounded-xl"
-                      />
-                    </div>
+                  />
+                </div>
 
                     <div className="space-y-4">
                       <Label htmlFor="phone" className="text-sm font-semibold text-foreground flex items-center gap-2">
                         <div className="w-2 h-2 bg-chart-4 rounded-full pulse-glow"></div>
-                        Téléphone *
-                      </Label>
-                      <Input
-                        id="phone"
-                        type="tel"
-                        required
-                        value={formData.phone}
-                        onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                    Téléphone *
+                  </Label>
+                  <Input
+                    id="phone"
+                    type="tel"
+                    required
+                    value={formData.phone}
+                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                         className="h-12 border-2 border-primary/20 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all duration-300 rounded-xl"
-                      />
-                    </div>
+                  />
+                </div>
 
                     <div className="space-y-4">
                       <Label htmlFor="address" className="text-sm font-semibold text-foreground flex items-center gap-2">
                         <div className="w-2 h-2 bg-chart-5 rounded-full pulse-glow"></div>
-                        Adresse *
-                      </Label>
-                      <Input
-                        id="address"
-                        type="text"
-                        required
-                        value={formData.address}
-                        onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                    Adresse *
+                  </Label>
+                  <Input
+                    id="address"
+                    type="text"
+                    required
+                    value={formData.address}
+                    onChange={(e) => setFormData({ ...formData, address: e.target.value })}
                         className="h-12 border-2 border-primary/20 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all duration-300 rounded-xl"
-                      />
-                    </div>
-                  </div>
+                  />
                 </div>
+              </div>
+            </div>
 
               </div>
             )}
@@ -493,10 +583,10 @@ export function ScreeningForm() {
                       validateStep2() ? "bg-green-500" : "bg-yellow-500"
                     }`}></div>
                     {validateStep2() ? "Étape complète - Prêt pour la suite" : "Veuillez remplir tous les champs requis"}
-                  </div>
-                </div>
+              </div>
+            </div>
 
-                {/* Medical Information */}
+            {/* Medical Information */}
                 <div className="space-y-4 sm:space-y-6 p-4 sm:p-6 lg:p-8 bg-gradient-to-r from-accent/20 to-accent/10 rounded-2xl border border-primary/10 hover:border-primary/20 transition-all duration-300">
                   <div className="flex items-center gap-3">
                     <div className="w-2 h-6 gradient-primary rounded-full"></div>
@@ -504,100 +594,113 @@ export function ScreeningForm() {
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 lg:gap-8">
-                    {/* Vaccination */}
+                {/* Vaccination */}
                     <div className="space-y-4">
                       <Label className="text-sm font-semibold text-foreground flex items-center gap-2">
                         <div className="w-2 h-2 bg-chart-1 rounded-full pulse-glow"></div>
                         Vaccination *
                       </Label>
-                      <RadioGroup
-                        value={formData.vaccination}
-                        onValueChange={(value) => setFormData({ ...formData, vaccination: value })}
-                        className="flex gap-6"
-                      >
-                        <div className="flex items-center space-x-3">
-                          <RadioGroupItem value="oui" id="vaccination-oui" className="w-5 h-5" />
-                          <Label htmlFor="vaccination-oui" className="cursor-pointer text-sm font-medium">
-                            Oui
-                          </Label>
-                        </div>
-                        <div className="flex items-center space-x-3">
-                          <RadioGroupItem value="non" id="vaccination-non" className="w-5 h-5" />
-                          <Label htmlFor="vaccination-non" className="cursor-pointer text-sm font-medium">
-                            Non
-                          </Label>
-                        </div>
-                      </RadioGroup>
+                  <RadioGroup
+                    value={formData.vaccination}
+                         onValueChange={handleVaccinationChange}
+                         className="flex gap-6"
+                       >
+                         <div className="flex items-center space-x-3 p-3 bg-gradient-to-r from-pink-50 to-rose-50 border border-pink-200 rounded-lg hover:from-pink-100 hover:to-rose-100 hover:border-pink-300 transition-all duration-300">
+                           <RadioGroupItem value="oui" id="vaccination-oui" className="w-5 h-5 border-2 border-pink-300 data-[state=checked]:bg-pink-500 data-[state=checked]:border-pink-500 data-[state=checked]:text-white" />
+                           <Label htmlFor="vaccination-oui" className="cursor-pointer text-sm font-medium flex items-center gap-2 text-pink-800">
+                             Oui
+                             <span className="text-xs text-green-600 font-semibold">(Enregistrement automatique)</span>
+                      </Label>
                     </div>
+                         <div className="flex items-center space-x-3 p-3 bg-gradient-to-r from-pink-50 to-rose-50 border border-pink-200 rounded-lg hover:from-pink-100 hover:to-rose-100 hover:border-pink-300 transition-all duration-300">
+                           <RadioGroupItem value="non" id="vaccination-non" className="w-5 h-5 border-2 border-pink-300 data-[state=checked]:bg-pink-500 data-[state=checked]:border-pink-500 data-[state=checked]:text-white" />
+                           <Label htmlFor="vaccination-non" className="cursor-pointer text-sm font-medium text-pink-800">
+                        Non
+                      </Label>
+                    </div>
+                  </RadioGroup>
+                      
+                      {/* Indicateur d'enregistrement automatique */}
+                      {formData.vaccination === "oui" && (
+                        <div className="mt-3 p-3 bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-xl">
+                          <div className="flex items-center gap-2 text-green-700">
+                            <div className="w-2 h-2 bg-green-500 rounded-full pulse-glow"></div>
+                            <span className="text-sm font-medium">
+                              Le formulaire sera enregistré automatiquement si vous sélectionnez "Oui"
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                </div>
 
-                    {/* Gynecology Consultation */}
+                {/* Gynecology Consultation */}
                     <div className="space-y-4">
                       <Label className="text-sm font-semibold text-foreground flex items-center gap-2">
                         <div className="w-2 h-2 bg-chart-2 rounded-full pulse-glow"></div>
                         Consultation Gynécologique *
                       </Label>
-                      <RadioGroup
-                        value={formData.gynecologyConsultation}
-                        onValueChange={(value) => setFormData({ ...formData, gynecologyConsultation: value })}
-                        className="flex gap-6"
-                      >
-                        <div className="flex items-center space-x-3">
-                          <RadioGroupItem value="oui" id="gyneco-oui" className="w-5 h-5" />
-                          <Label htmlFor="gyneco-oui" className="cursor-pointer text-sm font-medium">
-                            Oui
-                          </Label>
-                        </div>
-                        <div className="flex items-center space-x-3">
-                          <RadioGroupItem value="non" id="gyneco-non" className="w-5 h-5" />
-                          <Label htmlFor="gyneco-non" className="cursor-pointer text-sm font-medium">
-                            Non
-                          </Label>
-                        </div>
-                      </RadioGroup>
+                  <RadioGroup
+                    value={formData.gynecologyConsultation}
+                    onValueChange={(value) => setFormData({ ...formData, gynecologyConsultation: value })}
+                         className="flex gap-6"
+                       >
+                         <div className="flex items-center space-x-3 p-3 bg-gradient-to-r from-pink-50 to-rose-50 border border-pink-200 rounded-lg hover:from-pink-100 hover:to-rose-100 hover:border-pink-300 transition-all duration-300">
+                           <RadioGroupItem value="oui" id="gyneco-oui" className="w-5 h-5 border-2 border-pink-300 data-[state=checked]:bg-pink-500 data-[state=checked]:border-pink-500 data-[state=checked]:text-white" />
+                           <Label htmlFor="gyneco-oui" className="cursor-pointer text-sm font-medium text-pink-800">
+                        Oui
+                      </Label>
                     </div>
-                  </div>
+                         <div className="flex items-center space-x-3 p-3 bg-gradient-to-r from-pink-50 to-rose-50 border border-pink-200 rounded-lg hover:from-pink-100 hover:to-rose-100 hover:border-pink-300 transition-all duration-300">
+                           <RadioGroupItem value="non" id="gyneco-non" className="w-5 h-5 border-2 border-pink-300 data-[state=checked]:bg-pink-500 data-[state=checked]:border-pink-500 data-[state=checked]:text-white" />
+                           <Label htmlFor="gyneco-non" className="cursor-pointer text-sm font-medium text-pink-800">
+                        Non
+                      </Label>
+                    </div>
+                  </RadioGroup>
+                </div>
+              </div>
 
                   <div className="space-y-4">
                     <Label className="text-sm font-semibold text-foreground flex items-center gap-2">
                       <div className="w-2 h-2 bg-chart-3 rounded-full pulse-glow"></div>
                       Mammographie *
                     </Label>
-                    <RadioGroup
-                      value={formData.mammography}
-                      onValueChange={(value) => setFormData({ ...formData, mammography: value })}
-                      className="flex gap-6"
-                    >
-                      <div className="flex items-center space-x-3">
-                        <RadioGroupItem value="oui" id="mammography-oui" className="w-5 h-5" />
-                        <Label htmlFor="mammography-oui" className="cursor-pointer text-sm font-medium">
-                          Oui
-                        </Label>
-                      </div>
-                      <div className="flex items-center space-x-3">
-                        <RadioGroupItem value="non" id="mammography-non" className="w-5 h-5" />
-                        <Label htmlFor="mammography-non" className="cursor-pointer text-sm font-medium">
-                          Non
-                        </Label>
-                      </div>
-                    </RadioGroup>
+                <RadioGroup
+                  value={formData.mammography}
+                  onValueChange={(value) => setFormData({ ...formData, mammography: value })}
+                       className="flex gap-6"
+                     >
+                       <div className="flex items-center space-x-3 p-3 bg-gradient-to-r from-pink-50 to-rose-50 border border-pink-200 rounded-lg hover:from-pink-100 hover:to-rose-100 hover:border-pink-300 transition-all duration-300">
+                         <RadioGroupItem value="oui" id="mammography-oui" className="w-5 h-5 border-2 border-pink-300 data-[state=checked]:bg-pink-500 data-[state=checked]:border-pink-500 data-[state=checked]:text-white" />
+                         <Label htmlFor="mammography-oui" className="cursor-pointer text-sm font-medium text-pink-800">
+                      Oui
+                    </Label>
+                  </div>
+                       <div className="flex items-center space-x-3 p-3 bg-gradient-to-r from-pink-50 to-rose-50 border border-pink-200 rounded-lg hover:from-pink-100 hover:to-rose-100 hover:border-pink-300 transition-all duration-300">
+                         <RadioGroupItem value="non" id="mammography-non" className="w-5 h-5 border-2 border-pink-300 data-[state=checked]:bg-pink-500 data-[state=checked]:border-pink-500 data-[state=checked]:text-white" />
+                         <Label htmlFor="mammography-non" className="cursor-pointer text-sm font-medium text-pink-800">
+                      Non
+                    </Label>
+                  </div>
+                </RadioGroup>
 
-                    {formData.mammography === "oui" && (
+                {formData.mammography === "oui" && (
                       <div className="space-y-3 pl-6 border-l-2 border-primary/30 bg-primary/5 p-4 rounded-xl">
                         <Label htmlFor="mammographyDate" className="text-sm font-semibold text-foreground">
-                          Date de Rendez-vous *
-                        </Label>
-                        <Input
-                          id="mammographyDate"
-                          type="date"
-                          required
-                          value={formData.mammographyDate}
-                          onChange={(e) => setFormData({ ...formData, mammographyDate: e.target.value })}
+                      Date de Rendez-vous *
+                    </Label>
+                    <Input
+                      id="mammographyDate"
+                      type="date"
+                      required
+                      value={formData.mammographyDate}
+                      onChange={(e) => setFormData({ ...formData, mammographyDate: e.target.value })}
                           className="h-12 border-2 border-primary/20 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all duration-300 rounded-xl max-w-xs"
-                        />
-                      </div>
-                    )}
+                    />
                   </div>
-                </div>
+                )}
+              </div>
+            </div>
 
               </div>
             )}
@@ -617,114 +720,155 @@ export function ScreeningForm() {
                 <div className="space-y-4 sm:space-y-6 p-4 sm:p-6 lg:p-8 bg-gradient-to-r from-secondary/30 to-secondary/10 rounded-2xl border border-primary/10 hover:border-primary/20 transition-all duration-300">
                   <div className="flex items-center gap-3">
                     <div className="w-2 h-6 gradient-primary rounded-full"></div>
-                    <h3 className="text-xl font-bold text-foreground">Examens et Tests</h3>
+                    <h3 className="text-xl font-bold text-foreground">Examens Complémentaires</h3>
                   </div>
 
-                  <div className="space-y-6">
-                    <div className="space-y-4">
-                      <Label className="text-sm font-semibold text-foreground flex items-center gap-2">
-                        <div className="w-2 h-2 bg-chart-1 rounded-full pulse-glow"></div>
-                        FCU (Frottis Cervico-Utérin)
-                      </Label>
-                      <RadioGroup
-                        value={formData.fcu}
-                        onValueChange={(value) => setFormData({ ...formData, fcu: value })}
-                        className="flex gap-6"
-                      >
-                        <div className="flex items-center space-x-3">
-                          <RadioGroupItem value="oui" id="fcu-oui" className="w-5 h-5" />
-                          <Label htmlFor="fcu-oui" className="cursor-pointer text-sm font-medium">
-                            Oui
-                          </Label>
-                        </div>
-                        <div className="flex items-center space-x-3">
-                          <RadioGroupItem value="non" id="fcu-non" className="w-5 h-5" />
-                          <Label htmlFor="fcu-non" className="cursor-pointer text-sm font-medium">
-                            Non
-                          </Label>
-                        </div>
-                      </RadioGroup>
+                  {/* Question principale */}
+                  <div className="space-y-4">
+                    <Label className="text-sm font-semibold text-foreground flex items-center gap-2">
+                      <div className="w-2 h-2 bg-chart-1 rounded-full pulse-glow"></div>
+                      Y a-t-il des examens complémentaires à effectuer ? *
+                    </Label>
+                    <RadioGroup
+                      value={formData.hasAdditionalExams}
+                      onValueChange={handleAdditionalExamsChange}
+                      className="flex gap-6"
+                    >
+                      <div className="flex items-center space-x-3 p-3 bg-gradient-to-r from-pink-50 to-rose-50 border border-pink-200 rounded-lg hover:from-pink-100 hover:to-rose-100 hover:border-pink-300 transition-all duration-300">
+                        <RadioGroupItem value="oui" id="has-exams-oui" className="w-5 h-5 border-2 border-pink-300 data-[state=checked]:bg-pink-500 data-[state=checked]:border-pink-500 data-[state=checked]:text-white" />
+                        <Label htmlFor="has-exams-oui" className="cursor-pointer text-sm font-medium text-pink-800">
+                          Oui
+                        </Label>
+                      </div>
+                      <div className="flex items-center space-x-3 p-3 bg-gradient-to-r from-pink-50 to-rose-50 border border-pink-200 rounded-lg hover:from-pink-100 hover:to-rose-100 hover:border-pink-300 transition-all duration-300">
+                        <RadioGroupItem value="non" id="has-exams-non" className="w-5 h-5 border-2 border-pink-300 data-[state=checked]:bg-pink-500 data-[state=checked]:border-pink-500 data-[state=checked]:text-white" />
+                        <Label htmlFor="has-exams-non" className="cursor-pointer text-sm font-medium flex items-center gap-2 text-pink-800">
+                          Non
+                          <span className="text-xs text-green-600 font-semibold">(Enregistrement automatique)</span>
+                        </Label>
+                      </div>
+                    </RadioGroup>
 
-                      {formData.fcu === "oui" && (
-                        <div className="space-y-3 pl-6 border-l-2 border-primary/30 bg-primary/5 p-4 rounded-xl">
-                          <Label className="text-sm font-semibold text-foreground">Lieu d'examen</Label>
-                          <RadioGroup
-                            value={formData.fcuLocation}
-                            onValueChange={(value) => setFormData({ ...formData, fcuLocation: value })}
-                            className="flex gap-6"
-                          >
-                            <div className="flex items-center space-x-3">
-                              <RadioGroupItem value="SAR" id="fcu-sar" className="w-5 h-5" />
-                              <Label htmlFor="fcu-sar" className="cursor-pointer text-sm font-medium">
-                                SAR
-                              </Label>
-                            </div>
-                            <div className="flex items-center space-x-3">
-                              <RadioGroupItem value="Ailleurs" id="fcu-ailleurs" className="w-5 h-5" />
-                              <Label htmlFor="fcu-ailleurs" className="cursor-pointer text-sm font-medium">
-                                Ailleurs
-                              </Label>
-                            </div>
-                          </RadioGroup>
+                    {/* Indicateur d'enregistrement automatique */}
+                    {formData.hasAdditionalExams === "non" && (
+                      <div className="mt-3 p-3 bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-xl">
+                        <div className="flex items-center gap-2 text-green-700">
+                          <div className="w-2 h-2 bg-green-500 rounded-full pulse-glow"></div>
+                          <span className="text-sm font-medium">Enregistrement automatique en cours...</span>
                         </div>
-                      )}
-                    </div>
+                  </div>
+                )}
+              </div>
 
-                    <div className="space-y-4">
-                      <Label className="text-sm font-semibold text-foreground flex items-center gap-2">
-                        <div className="w-2 h-2 bg-chart-2 rounded-full pulse-glow"></div>
-                        Autres Examens
-                      </Label>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="flex items-center space-x-3 p-3 bg-accent/20 rounded-lg hover:bg-accent/30 transition-colors">
-                          <Checkbox
-                            id="hpv"
-                            checked={formData.hpv}
-                            onCheckedChange={(checked) => setFormData({ ...formData, hpv: checked as boolean })}
-                            className="w-5 h-5"
-                          />
-                          <Label htmlFor="hpv" className="cursor-pointer text-sm font-medium">
-                            HPV
-                          </Label>
+                  {/* Liste des examens (affichée seulement si "Oui") */}
+                  {formData.hasAdditionalExams === "oui" && (
+                    <div className="space-y-6">
+                      <div className="space-y-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="flex items-center space-x-3 p-3 bg-gradient-to-r from-pink-50 to-rose-50 border border-pink-200 rounded-lg hover:from-pink-100 hover:to-rose-100 hover:border-pink-300 transition-all duration-300">
+                    <Checkbox
+                      id="hpv"
+                      checked={formData.hpv}
+                      onCheckedChange={(checked) => setFormData({ ...formData, hpv: checked as boolean })}
+                            className="w-5 h-5 border-2 border-pink-300 data-[state=checked]:bg-pink-500 data-[state=checked]:border-pink-500 data-[state=checked]:text-white"
+                    />
+                          <Label htmlFor="hpv" className="cursor-pointer text-sm font-medium text-pink-800">
+                      HPV
+                    </Label>
+                  </div>
+                        <div className="flex items-center space-x-3 p-3 bg-gradient-to-r from-pink-50 to-rose-50 border border-pink-200 rounded-lg hover:from-pink-100 hover:to-rose-100 hover:border-pink-300 transition-all duration-300">
+                    <Checkbox
+                      id="echography"
+                      checked={formData.echographyMammaire}
+                      onCheckedChange={(checked) =>
+                        setFormData({ ...formData, echographyMammaire: checked as boolean })
+                      }
+                            className="w-5 h-5 border-2 border-pink-300 data-[state=checked]:bg-pink-500 data-[state=checked]:border-pink-500 data-[state=checked]:text-white"
+                    />
+                          <Label htmlFor="echography" className="cursor-pointer text-sm font-medium text-pink-800">
+                      Échographie Mammaire
+                    </Label>
+                  </div>
+                        <div className="flex items-center space-x-3 p-3 bg-gradient-to-r from-pink-50 to-rose-50 border border-pink-200 rounded-lg hover:from-pink-100 hover:to-rose-100 hover:border-pink-300 transition-all duration-300">
+                    <Checkbox
+                      id="thermo"
+                      checked={formData.thermoAblation}
+                      onCheckedChange={(checked) => setFormData({ ...formData, thermoAblation: checked as boolean })}
+                            className="w-5 h-5 border-2 border-pink-300 data-[state=checked]:bg-pink-500 data-[state=checked]:border-pink-500 data-[state=checked]:text-white"
+                    />
+                          <Label htmlFor="thermo" className="cursor-pointer text-sm font-medium text-pink-800">
+                      Thermo Ablation
+                    </Label>
+                  </div>
+                        <div className="flex items-center space-x-3 p-3 bg-gradient-to-r from-pink-50 to-rose-50 border border-pink-200 rounded-lg hover:from-pink-100 hover:to-rose-100 hover:border-pink-300 transition-all duration-300">
+                    <Checkbox
+                      id="anapath"
+                      checked={formData.anapath}
+                      onCheckedChange={(checked) => setFormData({ ...formData, anapath: checked as boolean })}
+                            className="w-5 h-5 border-2 border-pink-300 data-[state=checked]:bg-pink-500 data-[state=checked]:border-pink-500 data-[state=checked]:text-white"
+                    />
+                          <Label htmlFor="anapath" className="cursor-pointer text-sm font-medium text-pink-800">
+                      Anapath
+                    </Label>
                         </div>
-                        <div className="flex items-center space-x-3 p-3 bg-accent/20 rounded-lg hover:bg-accent/30 transition-colors">
-                          <Checkbox
-                            id="echography"
-                            checked={formData.echographyMammaire}
-                            onCheckedChange={(checked) =>
-                              setFormData({ ...formData, echographyMammaire: checked as boolean })
-                            }
-                            className="w-5 h-5"
-                          />
-                          <Label htmlFor="echography" className="cursor-pointer text-sm font-medium">
-                            Échographie Mammaire
-                          </Label>
-                        </div>
-                        <div className="flex items-center space-x-3 p-3 bg-accent/20 rounded-lg hover:bg-accent/30 transition-colors">
-                          <Checkbox
-                            id="thermo"
-                            checked={formData.thermoAblation}
-                            onCheckedChange={(checked) => setFormData({ ...formData, thermoAblation: checked as boolean })}
-                            className="w-5 h-5"
-                          />
-                          <Label htmlFor="thermo" className="cursor-pointer text-sm font-medium">
-                            Thermo Ablation
-                          </Label>
-                        </div>
-                        <div className="flex items-center space-x-3 p-3 bg-accent/20 rounded-lg hover:bg-accent/30 transition-colors">
-                          <Checkbox
-                            id="anapath"
-                            checked={formData.anapath}
-                            onCheckedChange={(checked) => setFormData({ ...formData, anapath: checked as boolean })}
-                            className="w-5 h-5"
-                          />
-                          <Label htmlFor="anapath" className="cursor-pointer text-sm font-medium">
-                            Anapath
-                          </Label>
-                        </div>
+                      </div>
+
+                      {/* FCU séparé en dessous */}
+                      <div className="mt-6 space-y-4">
+                        <Label className="text-sm font-semibold text-foreground flex items-center gap-2">
+                          <div className="w-2 h-2 bg-chart-1 rounded-full pulse-glow"></div>
+                          FCU (Frottis Cervico-Utérin)
+                        </Label>
+                        <RadioGroup
+                          value={formData.fcu}
+                          onValueChange={(value) => setFormData({ ...formData, fcu: value })}
+                          className="flex gap-6"
+                        >
+                          <div className="flex items-center space-x-3 p-3 bg-gradient-to-r from-pink-50 to-rose-50 border border-pink-200 rounded-lg hover:from-pink-100 hover:to-rose-100 hover:border-pink-300 transition-all duration-300">
+                            <RadioGroupItem value="oui" id="fcu-oui" className="w-5 h-5 border-2 border-pink-300 data-[state=checked]:bg-pink-500 data-[state=checked]:border-pink-500 data-[state=checked]:text-white" />
+                            <Label htmlFor="fcu-oui" className="cursor-pointer text-sm font-medium text-pink-800">
+                              Oui
+                            </Label>
+                          </div>
+                          <div className="flex items-center space-x-3 p-3 bg-gradient-to-r from-pink-50 to-rose-50 border border-pink-200 rounded-lg hover:from-pink-100 hover:to-rose-100 hover:border-pink-300 transition-all duration-300">
+                            <RadioGroupItem value="non" id="fcu-non" className="w-5 h-5 border-2 border-pink-300 data-[state=checked]:bg-pink-500 data-[state=checked]:border-pink-500 data-[state=checked]:text-white" />
+                            <Label htmlFor="fcu-non" className="cursor-pointer text-sm font-medium text-pink-800">
+                              Non
+                            </Label>
+                          </div>
+                        </RadioGroup>
+
+                        {/* Lieu d'examen FCU */}
+                        {formData.fcu === "oui" && (
+                          <div className="mt-4 p-4 bg-gradient-to-r from-primary/5 to-primary/10 border border-primary/20 rounded-xl">
+                            <Label className="text-sm font-semibold text-foreground flex items-center gap-2 mb-3">
+                              <div className="w-2 h-2 bg-primary rounded-full pulse-glow"></div>
+                              Lieu d'examen FCU
+                            </Label>
+                            <RadioGroup
+                              value={formData.fcuLocation}
+                              onValueChange={(value) => setFormData({ ...formData, fcuLocation: value })}
+                              className="flex gap-6"
+                            >
+                              <div className="flex items-center space-x-3 p-3 bg-gradient-to-r from-pink-50 to-rose-50 border border-pink-200 rounded-lg hover:from-pink-100 hover:to-rose-100 hover:border-pink-300 transition-all duration-300">
+                                <RadioGroupItem value="SAR" id="fcu-sar" className="w-5 h-5 border-2 border-pink-300 data-[state=checked]:bg-pink-500 data-[state=checked]:border-pink-500 data-[state=checked]:text-white" />
+                                <Label htmlFor="fcu-sar" className="cursor-pointer text-sm font-medium text-pink-800">
+                                  SAR
+                                </Label>
+                              </div>
+                              <div className="flex items-center space-x-3 p-3 bg-gradient-to-r from-pink-50 to-rose-50 border border-pink-200 rounded-lg hover:from-pink-100 hover:to-rose-100 hover:border-pink-300 transition-all duration-300">
+                                <RadioGroupItem value="Ailleurs" id="fcu-ailleurs" className="w-5 h-5 border-2 border-pink-300 data-[state=checked]:bg-pink-500 data-[state=checked]:border-pink-500 data-[state=checked]:text-white" />
+                                <Label htmlFor="fcu-ailleurs" className="cursor-pointer text-sm font-medium text-pink-800">
+                                  Ailleurs
+                                </Label>
+                              </div>
+                            </RadioGroup>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
+                  )}
                 </div>
               </div>
             )}
@@ -796,29 +940,6 @@ export function ScreeningForm() {
         </CardContent>
       </Card>
 
-      {/* Footer */}
-      <div className="text-center mt-8 sm:mt-12 p-4 sm:p-6 lg:p-8 bg-gradient-to-r from-accent/10 to-accent/5 rounded-2xl border border-primary/10">
-        <div className="flex items-center justify-center gap-2 sm:gap-3 mb-3 sm:mb-4">
-          <div className="w-6 h-6 sm:w-8 sm:h-8 gradient-primary rounded-full flex items-center justify-center">
-            <Image
-              src="/images/ruban-rose.png"
-              alt="Ruban Rose"
-              width={16}
-              height={16}
-              className="w-4 h-4 sm:w-5 sm:h-5 floating-animation"
-            />
-          </div>
-          <h3 className="text-base sm:text-lg font-bold text-foreground">Message Important</h3>
-        </div>
-        <p className="text-muted-foreground text-sm sm:text-base max-w-2xl mx-auto leading-relaxed">
-          Le dépistage précoce sauve des vies. Prenez soin de vous et de vos proches. 
-          <span className="text-primary font-semibold"> Ensemble, nous pouvons vaincre le cancer du sein.</span>
-        </p>
-        <div className="flex items-center justify-center gap-2 mt-3 sm:mt-4 text-xs sm:text-sm text-primary">
-          <div className="w-2 h-2 bg-primary rounded-full pulse-glow"></div>
-          <span>Vos données sont protégées et confidentielles</span>
-        </div>
-      </div>
 
       {/* Modal */}
       <Modal
